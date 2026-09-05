@@ -1,69 +1,58 @@
-# APC Americano Tracker
+# 🎾 APC Americano Tracker
 
-Ein schlanker, selbst-gehosteter Punktetracker für Americano-Turniere des **Alsdorfer Padel Club (APC)**. Läuft komplett im Browser, keine Installation, keine Datenbank, keine Kosten.
+Der Punktetracker, der schneller rechnet als ihr nach dem dritten Match noch im Kopf könnt.
 
-## Was das Tool macht
+Gebaut für Americano-Turniere des **Alsdorfer Padel Club (APC)** – läuft komplett im Browser, merkt sich alles, verzeiht Fehler, und macht am Ende sogar noch ein Bild für Instagram. Läuft auf jedem Gerät mit Browser. Kostet nix. Muss nicht installiert werden. Kein Konto, kein Login, kein Kleingedrucktes.
 
-- Erfasst Ergebnisse pro Match live während eines Americano-Turniers
-- Rechnet automatisch die Einzelpunkte aller Spieler:innen zusammen (nicht Team-Punkte – beim Americano rotieren die Partner ja jede Runde)
-- Verteilt Pausen bei ungerader Teilnehmerzahl automatisch fair, sodass niemand deutlich mehr aussetzt als andere
-- Zeigt jederzeit eine Live-Tabelle mit dem aktuellen Punktestand
-- Funktioniert für 1–6 Plätze gleichzeitig, bei beliebiger Spielerzahl (mind. 4)
+### 🔗 [Jetzt live ausprobieren → apc-americano-tracker.netlify.app](https://apc-americano-tracker.netlify.app/)
 
-## Funktionen
+---
 
-- ✅ Frei wählbare Anzahl Plätze (1–6)
-- ✅ Beliebige Spielerzahl, automatische faire Rotation und Pausenverteilung
-- ✅ 24-Punkte-Scoring pro Match (Standard-Americano) – zweite Zahl wird automatisch ergänzt
-- ✅ Live-Leaderboard, sortiert nach Gesamtpunkten
-- ✅ Eingebauter Rundentimer (Start/Pause/Reset, ±5-Minuten-Anpassung)
-- ✅ Automatisches Speichern nach jeder Änderung (kein Datenverlust bei versehentlichem Neuladen)
-- ✅ Manuelle Backup-Funktion: Turnierstand als Text kopieren und z. B. per WhatsApp sichern, jederzeit wiederherstellbar
-- ✅ APC-Branding (Logo, Farben, Schrift) fest eingebaut
-- ✅ Läuft als einzelne HTML-Datei – kein Build, keine Abhängigkeiten, kein Server nötig
+## Was das Ding kann
 
-## Nutzung
+Beim Americano rotieren die Partner jede Runde – und spätestens ab Runde 4 weiß niemand mehr, wer wie oft schon pausiert hat oder wie viele Punkte Karina eigentlich hat. Genau dafür ist dieser Tracker da.
 
-### 1. Turnier einrichten
-1. Datei öffnen (lokal per Doppelklick oder über den gehosteten Link)
-2. Anzahl der verfügbaren Plätze auswählen (1–6)
-3. Namen aller Spieler:innen eintragen (ein Name pro Zeile)
-4. Reicht die Spielerzahl nicht für die gewählte Platzanzahl, werden automatisch weniger Plätze genutzt – der Tracker zeigt das direkt an
-5. „Turnier starten“
+- 🏟️ **1–6 Plätze frei wählbar**, beliebig viele Spieler:innen (mind. 4) – reicht die Anzahl nicht für alle gewählten Plätze, wird automatisch angepasst, ganz ohne Kopfrechnen
+- ⚖️ **Faire Pausen-Rotation** – wer am wenigsten pausiert hat, ist automatisch als Nächstes dran. Niemand kann sich mehr "aus Versehen" öfter eine Pause gönnen
+- 🔢 **24-Punkte-Scoring** – eine Zahl eintragen, die Gegenseite ergänzt sich von selbst
+- 🏆 **Live-Tabelle** – der Zwischenstand ist immer sichtbar, auch für alle, die schon anfangen wollen zu diskutieren, wer eigentlich vorne liegt
+- 🔀 **Tauschen** – für den Fall, dass jemand verletzt ausfällt, zu spät kommt, oder partout nicht gegen die eigene Partnerin spielen möchte. Zwei Namen antippen, fertig
+- ↩️ **Runde zurücknehmen** – falls sich beim Eintragen jemand vertippt (kommt vor, besonders nach dem dritten Aufschlag-Ass)
+- 💾 **Sichern & Wiederherstellen** – Turnierstand als Text kopieren, sich selbst schicken, jederzeit wieder einspielen. Kein Turnier geht verloren, nur weil das Handy kurz spinnt
+- 🔒 **Bildschirm bleibt an** – schläft nicht mitten in Runde 5 einfach ein
+- 📸 **Ergebnis-Bild für Instagram** – am Ende ein Klick, fertig ist die Grafik im APC-Design. Recap-Content, ohne dass irgendwer nachträglich in Canva rumfummeln muss
 
-### 2. Während des Turniers
-- Pro Platz wird das Ergebnis eingetragen (eine Zahl reicht, die Gegenseite wird automatisch auf 24 ergänzt)
-- „Runde abschließen“ schreibt die Punkte gut und generiert direkt die nächste Runde mit neuer, fairer Team-/Pausenzuteilung
-- Die Tabelle rechts zeigt jederzeit den Zwischenstand
+## So läuft's ab
 
-### 3. Turnier beenden
-„Turnier beenden“ zeigt die finale Rangliste mit Sieger:in. Mit „Neues Turnier starten“ geht’s zurück zum Setup.
+1. **Plätze wählen**, Namen eintippen (ein Name pro Zeile), Turnier starten
+2. **Ergebnisse eintragen**, Runde abschließen – die nächste Zuteilung kommt automatisch
+3. Bei Bedarf **tauschen**, **zurücknehmen** oder zwischendurch **sichern**
+4. **Turnier beenden** → Sieger:in steht fest, Bild für Insta ist einen Klick entfernt
 
-### 4. Backup
-Über den Button „💾 Sichern“ lässt sich der komplette Stand als Text kopieren (z. B. an sich selbst per WhatsApp schicken). Bei Bedarf lässt sich dieser Text jederzeit wieder einfügen – sowohl während eines laufenden Turniers als auch auf dem Start-Bildschirm, falls der Tracker neu geöffnet werden musste.
+## Selbst hosten
 
-## Deployment
+Ist bereits live unter dem Link oben. Wer sich eine eigene Kopie bauen will (z. B. für einen anderen Verein, andere Farben, wer weiß):
 
-Diese Datei ist eine einzelne, in sich geschlossene `index.html` – sie kann direkt gehostet werden, z. B. kostenlos über [Netlify](https://netlify.com):
+1. Repo forken/klonen
+2. `index.html` liegt im Root – kein Build nötig, keine Abhängigkeiten außer dem Google Font "Montserrat"
+3. Bei [Netlify](https://netlify.com) einbinden: **Add new site → Import an existing project**, alle Build-Felder leer lassen, Deploy klicken
+4. Fertig ist die eigene URL
 
-1. Repo mit Netlify verbinden (**Add new site → Import an existing project**)
-2. Keine Build-Einstellungen nötig (kein Build-Command, kein Framework)
-3. Deploy – fertig ist eine öffentliche URL
+## Technisches Kleingedruckte
 
-Alternativ: Datei direkt per Drag & Drop auf [app.netlify.com/drop](https://app.netlify.com/drop) ziehen für einen Sofort-Link ohne Repo.
+- Reines HTML/CSS/JavaScript, keine Frameworks
+- Speicherung läuft automatisch über `localStorage` – der Stand bleibt auf dem genutzten Gerät/Browser erhalten
+- Logo ist als Base64 direkt im Code eingebettet, damit alles eine einzige, portable Datei bleibt
 
-## Technische Hinweise
+## Ehrlich gesagt: die Grenzen
 
-- Reines HTML/CSS/JavaScript, keine Frameworks, keine externen Abhängigkeiten außer dem Google-Font „Montserrat“
-- Speicherung erfolgt automatisch im Browser (`localStorage`) – der Stand bleibt auf dem genutzten Gerät/Browser erhalten, auch nach Neuladen der Seite
-- Logo ist als Base64 direkt im Code eingebettet – die Datei bleibt dadurch ein einzelnes, portables File ohne separate Bilddatei
-
-## Bekannte Grenzen
-
-- **Kein Mehrgeräte-Sync**: Der Tracker ist für die Bedienung von *einem* Gerät während des Turniers gedacht (z. B. ein Tablet am Tisch). Öffnet jemand den Link auf einem zweiten Handy, sieht diese Person eine eigene, unabhängige, leere Kopie – kein Live-Abgleich zwischen Geräten.
-- **Kein Zugriffsschutz**: Wer den Link hat, kann Ergebnisse eintragen bzw. verändern. Für den internen Gebrauch im Verein unkritisch, für öffentliche Verlinkung ggf. zusätzlich absichern.
-- Gedacht für Americano im 24-Punkte-Format; andere Zählweisen sind aktuell nicht einstellbar.
+- **Ein Gerät, ein Turnier** – der Tracker ist für die Bedienung von *einem* Gerät gedacht (Tablet am Tisch). Öffnet jemand den Link auf einem zweiten Handy, sieht diese Person eine eigene, leere Kopie – kein Live-Sync zwischen Geräten (noch nicht, siehe unten).
+- **Kein Zugriffsschutz** – wer den Link hat, kann Ergebnisse eintragen. Für den Vereinsgebrauch unter Freund:innen völlig okay, für die große weite Öffentlichkeit vielleicht nicht.
+- **Nur 24-Punkte-Americano** – andere Zählweisen gibt's aktuell nicht.
+- Eine "echte" Mehrgeräte-Version mit gemeinsamer Datenbank (jedes Handy sieht live denselben Stand) ist technisch möglich, aber (noch) nicht eingebaut.
 
 ---
 
 **Alsdorfer Padel Club (APC) e.V.** · Sportforum Alsdorf · [apc-alsdorf.de](https://www.apc-alsdorf.de/)
+
+*Nur noch ein Turnier, versprochen.* 😅
