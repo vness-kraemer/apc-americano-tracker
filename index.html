@@ -103,21 +103,27 @@
   }
   .round-header .rnum{font-family:'Montserrat', sans-serif; font-weight:800; font-size:26px;}
   .round-header .rsub{font-size:12.5px; opacity:0.85; font-weight:600;}
-  .timer-box{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;}
-  .timer-display{
-    font-family:'Montserrat', sans-serif; font-weight:800; font-size:24px; background:rgba(255,255,255,0.14);
-    padding:4px 14px; border-radius:8px; min-width:88px; text-align:center;
-  }
-  .timer-controls{display:flex; gap:8px;}
-  .timer-controls button{
-    background:rgba(255,255,255,0.16); color:#fff; padding:8px 12px; font-size:13px;
-  }
-  .timer-controls button:hover{background:rgba(255,255,255,0.28);}
+  .header-actions{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;}
   .backup-toggle{background:rgba(255,255,255,0.16); color:#fff; padding:8px 12px; font-size:13px;}
   .backup-toggle:hover{background:rgba(255,255,255,0.28);}
+  .backup-toggle.active{background:var(--ball); color:var(--court);}
+  .backup-toggle.active:hover{background:var(--ball);}
+
+  .swap-hint{
+    background:#EAF1EE; border:1px solid #CFE0D8; color:var(--court-dark); border-radius:12px;
+    padding:10px 16px; font-size:13.5px; margin-bottom:14px; font-weight:600;
+  }
+  .swap-target{cursor:default;}
+  .swap-mode .swap-target{
+    cursor:pointer; border-bottom:1.5px dashed var(--court); padding:1px 2px; border-radius:3px;
+  }
+  .swap-mode .swap-target:hover{background:rgba(2,15,35,0.06);}
+  .swap-target.selected{
+    background:var(--ball) !important; color:var(--court) !important; border-bottom-color:transparent;
+  }
   @media (max-width: 640px){
     .round-header{padding:16px 18px;}
-    .timer-box{width:100%; justify-content:center;}
+    .header-actions{width:100%; justify-content:center;}
   }
 
   .court-card{
@@ -229,8 +235,8 @@
   const MAX_COURTS = 6;
 
   let state = null;
-  let timer = { seconds: 20*60, running:false, intervalId:null, initial:20*60 };
-  let ui = { backupOpen:false, backupMsg:'', setupRestoreOpen:false, lastSaved:null, setupCourts:3 };
+  let ui = { backupOpen:false, backupMsg:'', setupRestoreOpen:false, lastSaved:null, setupCourts:3, swapMode:false, swapSelection:null };
+  let wakeLock = null;
   const BACKUP_PREFIX = 'APC-AMERICANO-BACKUP-V2:';
 
   function buildBackupString(){
@@ -355,6 +361,61 @@
     return state.current.courts.every(c => c.scoreA !== null && c.scoreB !== null);
   }
 
+  // ---------- manual position swap (e.g. injury, partner request, late arrival) ----------
+  function parseLocKey(key){
+    if(key.charAt(0) === 'r') return { resting:true, restIdx: parseInt(key.slice(2),10) };
+    const parts = key.split(':'); // c:courtIdx:team:slot
+    return { resting:false, court: parseInt(parts[1],10), team: parts[2], slot: parseInt(parts[3],10) };
+  }
+  function getPlayerIndexAt(loc){
+    if(loc.resting) return state.current.resting[loc.restIdx];
+    const court = state.current.courts[loc.court];
+    return (loc.team === 'A' ? court.teamA : court.teamB)[loc.slot];
+  }
+  function setPlayerIndexAt(loc, playerIdx){
+    if(loc.resting){ state.current.resting[loc.restIdx] = playerIdx; return; }
+    const court = state.current.courts[loc.court];
+    const arr = loc.team === 'A' ? court.teamA : court.teamB;
+    arr[loc.slot] = playerIdx;
+  }
+
+  window.toggleSwapMode = function(){
+    ui.swapMode = !ui.swapMode;
+    ui.swapSelection = null;
+    render();
+  };
+
+  window.selectForSwap = function(key){
+    if(!ui.swapMode) return;
+    if(ui.swapSelection === null){
+      ui.swapSelection = key;
+      render();
+      return;
+    }
+    if(ui.swapSelection === key){
+      ui.swapSelection = null;
+      render();
+      return;
+    }
+    const locA = parseLocKey(ui.swapSelection);
+    const locB = parseLocKey(key);
+    const playerA = getPlayerIndexAt(locA);
+    const playerB = getPlayerIndexAt(locB);
+    setPlayerIndexAt(locA, playerB);
+    setPlayerIndexAt(locB, playerA);
+    // keep sitOuts accurate if the swap moves someone between "resting" and "playing"
+    if(locA.resting && !locB.resting){
+      state.players[playerA].sitOuts -= 1;
+      state.players[playerB].sitOuts += 1;
+    } else if(!locA.resting && locB.resting){
+      state.players[playerB].sitOuts -= 1;
+      state.players[playerA].sitOuts += 1;
+    }
+    ui.swapSelection = null;
+    saveState();
+    render();
+  };
+
   // ---------- setup screen logic ----------
   window.selectCourts = function(n){
     ui.setupCourts = n;
@@ -409,6 +470,7 @@
     generateRound();
     saveState();
     render();
+    requestWakeLock();
   };
 
   window.setScore = function(courtIdx, team, value){
@@ -438,9 +500,34 @@
     render();
   };
 
+  window.undoLastRound = function(){
+    if(state.history.length === 0) return;
+    if(!confirm('Letzte abgeschlossene Runde (Runde ' + state.history[state.history.length-1].roundNumber + ') zurücknehmen? Die aktuelle, noch nicht abgeschlossene Runde geht dabei verloren und wird danach neu berechnet.')) return;
+
+    // revert points/gamesPlayed from the last completed round
+    const lastRound = state.history.pop();
+    lastRound.courts.forEach(c=>{
+      c.teamA.forEach(i=>{ state.players[i].points -= c.scoreA; state.players[i].gamesPlayed -= 1; });
+      c.teamB.forEach(i=>{ state.players[i].points -= c.scoreB; state.players[i].gamesPlayed -= 1; });
+    });
+
+    // revert sitOuts caused by generating the current (now discarded) round
+    if(state.current && state.current.resting){
+      state.current.resting.forEach(i=>{ state.players[i].sitOuts -= 1; });
+    }
+
+    // restore the last round as the editable current round, scores intact so only the mistake needs fixing
+    state.round = lastRound.roundNumber;
+    state.current = lastRound;
+    ui.swapMode = false;
+    ui.swapSelection = null;
+    saveState();
+    render();
+  };
+
   window.finishTournament = function(){
     state.phase = 'finished';
-    stopTimer();
+    releaseWakeLock();
     saveState();
     render();
   };
@@ -449,7 +536,7 @@
     if(!confirm('Turnier wirklich zurücksetzen? Alle Punkte gehen verloren.')) return;
     await clearState();
     state = null;
-    stopTimer();
+    releaseWakeLock();
     render();
   };
 
@@ -506,12 +593,11 @@
         parsed.numCourts = Math.max(1, Math.min(MAX_COURTS, Math.floor(parsed.players.length/4)) || 3);
       }
       state = parsed;
-      stopTimer();
-      timer.seconds = timer.initial;
       ui.backupOpen = false;
       ui.setupRestoreOpen = false;
       saveState();
       render();
+      if(state.phase === 'tournament'){ requestWakeLock(); }
     }catch(e){
       alert('Backup konnte nicht gelesen werden. Bitte den kompletten Text prüfen.');
     }
@@ -522,44 +608,153 @@
     render();
   };
 
-  // ---------- timer ----------
-  function stopTimer(){
-    if(timer.intervalId){ clearInterval(timer.intervalId); timer.intervalId = null; }
-    timer.running = false;
+  // ---------- wake lock (keep screen on during a tournament) ----------
+  async function requestWakeLock(){
+    try{
+      if('wakeLock' in navigator){
+        wakeLock = await navigator.wakeLock.request('screen');
+      }
+    }catch(e){ /* not supported or denied - fail silently, no UI clutter */ }
   }
-  window.toggleTimer = function(){
-    if(timer.running){
-      stopTimer();
-    }else{
-      timer.running = true;
-      timer.intervalId = setInterval(()=>{
-        if(timer.seconds > 0){ timer.seconds -= 1; }
-        else { stopTimer(); }
-        updateTimerDisplay();
-      }, 1000);
+  function releaseWakeLock(){
+    try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+  }
+  document.addEventListener('visibilitychange', async ()=>{
+    if(document.visibilityState === 'visible' && state && state.phase === 'tournament'){
+      await requestWakeLock();
     }
-    updateTimerDisplay();
-  };
-  window.resetTimer = function(){
-    stopTimer();
-    timer.seconds = timer.initial;
-    updateTimerDisplay();
-  };
-  window.adjustTimerLength = function(deltaMin){
-    timer.initial = Math.max(5*60, timer.initial + deltaMin*60);
-    if(!timer.running){ timer.seconds = timer.initial; }
-    updateTimerDisplay();
-  };
-  function fmtTime(s){
-    const m = Math.floor(s/60); const sec = s%60;
-    return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  });
+
+  // ---------- Instagram-ready result image ----------
+  function loadImage(src){
+    return new Promise((resolve, reject)=>{
+      const img = new Image();
+      img.onload = ()=>resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
   }
-  function updateTimerDisplay(){
-    const el = document.getElementById('timer-display');
-    if(el) el.textContent = fmtTime(timer.seconds);
-    const btn = document.getElementById('timer-toggle-btn');
-    if(btn) btn.textContent = timer.running ? 'Pause' : (timer.seconds === timer.initial ? 'Start' : 'Weiter');
+  function spaceOut(str){ return str.split('').join('\u2009'); } // thin space for a light letter-spacing effect
+
+  async function buildShareCanvas(){
+    const fontSpecs = ['800 64px Montserrat','700 26px Montserrat','600 28px Montserrat','700 32px Montserrat','800 34px Montserrat','600 24px Montserrat'];
+    try{ await Promise.all(fontSpecs.map(f=>document.fonts.load(f))); }catch(e){ /* proceed with fallback font if loading fails */ }
+
+    const logoImg = await loadImage(LOGO_SRC);
+    const sorted = standings();
+    const winner = sorted[0];
+
+    const W = 1080, H = 1350;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#F2F4F6';
+    ctx.fillRect(0,0,W,H);
+
+    const logoH = 130;
+    const logoW = logoImg.width * (logoH/logoImg.height);
+    ctx.drawImage(logoImg, (W-logoW)/2, 70, logoW, logoH);
+
+    let y = 70 + logoH + 70;
+
+    ctx.textAlign = 'center';
+    ctx.font = '92px sans-serif';
+    ctx.fillText('🏆', W/2, y);
+    y += 78;
+
+    ctx.font = '700 26px Montserrat, sans-serif';
+    ctx.fillStyle = '#9C7207';
+    ctx.fillText(spaceOut('SIEGER:IN'), W/2, y);
+    y += 62;
+
+    ctx.font = '800 64px Montserrat, sans-serif';
+    ctx.fillStyle = '#020F23';
+    ctx.fillText(winner.name, W/2, y);
+    y += 48;
+
+    ctx.font = '600 28px Montserrat, sans-serif';
+    ctx.fillStyle = '#5B6472';
+    ctx.fillText(`${winner.points} Punkte aus ${winner.gamesPlayed} Matches`, W/2, y);
+    y += 56;
+
+    ctx.strokeStyle = '#D8DEE2';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(W*0.15, y);
+    ctx.lineTo(W*0.85, y);
+    ctx.stroke();
+    y += 54;
+
+    const maxRows = Math.min(sorted.length, 9);
+    const rowH = 76;
+    for(let i=0; i<maxRows; i++){
+      const p = sorted[i];
+      const rowY = y + i*rowH;
+      ctx.beginPath();
+      ctx.arc(120, rowY+8, 27, 0, Math.PI*2);
+      ctx.fillStyle = i===0 ? '#FDBB0B' : '#E5E9EB';
+      ctx.fill();
+      ctx.textAlign = 'center';
+      ctx.font = '800 26px Montserrat, sans-serif';
+      ctx.fillStyle = '#020F23';
+      ctx.fillText(String(i+1), 120, rowY+17);
+
+      ctx.textAlign = 'left';
+      ctx.font = '700 32px Montserrat, sans-serif';
+      ctx.fillStyle = '#0B1420';
+      ctx.fillText(p.name, 172, rowY+17);
+
+      ctx.textAlign = 'right';
+      ctx.font = '800 34px Montserrat, sans-serif';
+      ctx.fillStyle = '#020F23';
+      ctx.fillText(String(p.points), W-100, rowY+17);
+    }
+    y += maxRows*rowH + 6;
+    if(sorted.length > maxRows){
+      ctx.textAlign = 'center';
+      ctx.font = '600 24px Montserrat, sans-serif';
+      ctx.fillStyle = '#5B6472';
+      ctx.fillText(`+ ${sorted.length - maxRows} weitere`, W/2, y);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.font = '600 24px Montserrat, sans-serif';
+    ctx.fillStyle = '#5B6472';
+    ctx.fillText('Alsdorfer Padel Club · apc-alsdorf.de', W/2, H-60);
+
+    return canvas;
   }
+
+  window.downloadSharePic = async function(){
+    const btn = document.getElementById('sharepic-btn');
+    const originalLabel = btn ? btn.textContent : '';
+    if(btn){ btn.disabled = true; btn.textContent = 'Erstelle Bild…'; }
+    try{
+      const canvas = await buildShareCanvas();
+      const dataUrl = canvas.toDataURL('image/png');
+      const win = window.open();
+      if(win){
+        win.document.write(
+          '<title>APC Turnier-Ergebnis</title>' +
+          '<body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;">' +
+          '<img src="' + dataUrl + '" style="max-width:100%;height:auto;" />' +
+          '</body>'
+        );
+      } else {
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'apc-turnier-ergebnis.png';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    }catch(e){
+      alert('Bild konnte nicht erstellt werden. Als Alternative geht auch ein normaler Screenshot der Abschluss-Seite.');
+    }finally{
+      if(btn){ btn.disabled = false; btn.textContent = originalLabel; }
+    }
+  };
 
   // ---------- rendering ----------
   function standings(){
@@ -593,6 +788,11 @@
     return d.innerHTML;
   }
 
+  function nameSpan(playerIdx, locKey){
+    const selected = ui.swapSelection === locKey;
+    return `<span class="swap-target ${selected?'selected':''}" onclick="selectForSwap('${locKey}')">${escapeHtml(playerName(playerIdx))}</span>`;
+  }
+
   function renderCourt(court, idx){
     const teamAReady = court.scoreA !== null;
     const teamBReady = court.scoreB !== null;
@@ -602,7 +802,7 @@
         <div class="score-row">
           <div class="team-info">
             <span class="team-tag a">Team Blau</span>
-            <div class="team-names">${escapeHtml(playerName(court.teamA[0]))} &amp; ${escapeHtml(playerName(court.teamA[1]))}</div>
+            <div class="team-names">${nameSpan(court.teamA[0], 'c:'+idx+':A:0')} &amp; ${nameSpan(court.teamA[1], 'c:'+idx+':A:1')}</div>
           </div>
           <input class="score-input" type="number" min="0" max="${POINTS_TARGET}" placeholder="–"
             value="${teamAReady ? court.scoreA : ''}"
@@ -611,7 +811,7 @@
         <div class="score-row">
           <div class="team-info">
             <span class="team-tag b">Team Gelb</span>
-            <div class="team-names">${escapeHtml(playerName(court.teamB[0]))} &amp; ${escapeHtml(playerName(court.teamB[1]))}</div>
+            <div class="team-names">${nameSpan(court.teamB[0], 'c:'+idx+':B:0')} &amp; ${nameSpan(court.teamB[1], 'c:'+idx+':B:1')}</div>
           </div>
           <input class="score-input" type="number" min="0" max="${POINTS_TARGET}" placeholder="–"
             value="${teamBReady ? court.scoreB : ''}"
@@ -653,9 +853,11 @@
   }
 
   function renderTournament(){
-    const restingNames = state.current.resting.map(i=>playerName(i)).join(', ');
     const ready = allScoresEntered();
     const reduced = state.current.effectiveCourts < state.numCourts;
+    const restingSpans = state.current.resting.length
+      ? state.current.resting.map((i,ri)=>nameSpan(i, 'r:'+ri)).join(', ')
+      : '–';
     return `
       <div class="topbar">
         <div class="brand">
@@ -670,38 +872,36 @@
           <div class="rnum">Runde ${state.round}</div>
           <div class="rsub">${state.players.length} Spieler:innen · ${state.current.effectiveCourts} Plätze aktiv · ${POINTS_TARGET}-Punkte-Matches</div>
         </div>
-        <div class="timer-box">
-          <div class="timer-controls">
-            <button onclick="adjustTimerLength(-5)">–5</button>
-            <button onclick="adjustTimerLength(5)">+5</button>
-          </div>
-          <div class="timer-display" id="timer-display">${fmtTime(timer.seconds)}</div>
-          <div class="timer-controls">
-            <button id="timer-toggle-btn" onclick="toggleTimer()">${timer.running ? 'Pause' : 'Start'}</button>
-            <button onclick="resetTimer()">Reset</button>
-          </div>
+        <div class="header-actions">
+          <button class="backup-toggle ${ui.swapMode?'active':''}" onclick="toggleSwapMode()">${ui.swapMode ? '✅ Fertig' : '🔀 Tauschen'}</button>
           <button class="backup-toggle" onclick="toggleBackupPanel()">💾 Sichern</button>
         </div>
       </div>
 
       ${ui.backupOpen ? renderBackupPanel() : ''}
 
-      <div class="tour-grid">
-        <div>
-          ${reduced ? `<div class="courts-reduced-note">Nur ${state.current.effectiveCourts} von ${state.numCourts} gewählten Plätzen aktiv – nicht genug Spieler:innen für mehr.</div>` : ''}
-          <div class="resting-box">⏸️ Pause diese Runde: <b>${restingNames || '–'}</b></div>
-          ${state.current.courts.map((c,i)=>renderCourt(c,i)).join('')}
+      <div class="${ui.swapMode ? 'swap-mode' : ''}">
+        <div class="tour-grid">
+          <div>
+            ${reduced ? `<div class="courts-reduced-note">Nur ${state.current.effectiveCourts} von ${state.numCourts} gewählten Plätzen aktiv – nicht genug Spieler:innen für mehr.</div>` : ''}
+            ${ui.swapMode ? `<div class="swap-hint">🔀 Tippe zwei Namen an, um sie zu tauschen (z. B. bei Verletzung, Partner-Wunsch oder Zuspätkommer:in).</div>` : ''}
+            <div class="resting-box">⏸️ Pause diese Runde: <b>${restingSpans}</b></div>
+            ${state.current.courts.map((c,i)=>renderCourt(c,i)).join('')}
 
-          <div class="complete-row">
-            <button class="btn-primary" ${ready ? '' : 'disabled'} onclick="completeRound()">
-              Runde ${state.round} abschließen &amp; nächste Runde starten
-            </button>
-            <button class="btn-ghost" onclick="finishTournament()">Turnier beenden</button>
+            <div class="complete-row">
+              <button class="btn-primary" ${ready ? '' : 'disabled'} onclick="completeRound()">
+                Runde ${state.round} abschließen &amp; nächste Runde starten
+              </button>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                ${state.history.length > 0 ? `<button class="btn-ghost" onclick="undoLastRound()">↩ Runde ${state.history[state.history.length-1].roundNumber} zurücknehmen</button>` : ''}
+                <button class="btn-ghost" onclick="finishTournament()">Turnier beenden</button>
+              </div>
+            </div>
+
+            ${renderHistory()}
           </div>
-
-          ${renderHistory()}
+          <div>${renderLeaderboard()}</div>
         </div>
-        <div>${renderLeaderboard()}</div>
       </div>
     `;
   }
@@ -728,8 +928,10 @@
           `).join('')}
         </div>
       </div>
-      <div class="footer-actions">
-        <button class="btn-primary" onclick="startNewTournament()">Neues Turnier starten</button>
+      <div class="footer-actions" style="flex-direction:column; gap:10px;">
+        <button class="btn-primary" id="sharepic-btn" onclick="downloadSharePic()">📸 Ergebnis-Bild für Instagram</button>
+        <div style="font-size:12px; color:var(--ink-soft); text-align:center;">Öffnet in neuem Tab – dort Bild lange gedrückt halten &amp; speichern</div>
+        <button class="btn-ghost" onclick="startNewTournament()">Neues Turnier starten</button>
       </div>
     `;
   }
@@ -786,7 +988,6 @@ Carla
       updateSetupHint();
     } else if(state.phase === 'tournament'){
       app.innerHTML = renderTournament();
-      updateTimerDisplay();
     } else if(state.phase === 'finished'){
       app.innerHTML = renderFinished();
     }
@@ -801,7 +1002,7 @@ Carla
   (async function init(){
     await loadState();
     if(state && state.phase === 'tournament'){
-      timer.seconds = timer.initial;
+      requestWakeLock();
     }
     render();
   })();
