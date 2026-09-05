@@ -103,38 +103,47 @@
   }
   .round-header .rnum{font-family:'Montserrat', sans-serif; font-weight:800; font-size:26px;}
   .round-header .rsub{font-size:12.5px; opacity:0.85; font-weight:600;}
-  .timer-box{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .timer-box{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;}
   .timer-display{
     font-family:'Montserrat', sans-serif; font-weight:800; font-size:24px; background:rgba(255,255,255,0.14);
     padding:4px 14px; border-radius:8px; min-width:88px; text-align:center;
   }
+  .timer-controls{display:flex; gap:8px;}
   .timer-controls button{
     background:rgba(255,255,255,0.16); color:#fff; padding:8px 12px; font-size:13px;
   }
   .timer-controls button:hover{background:rgba(255,255,255,0.28);}
   .backup-toggle{background:rgba(255,255,255,0.16); color:#fff; padding:8px 12px; font-size:13px;}
   .backup-toggle:hover{background:rgba(255,255,255,0.28);}
+  @media (max-width: 640px){
+    .round-header{padding:16px 18px;}
+    .timer-box{width:100%; justify-content:center;}
+  }
 
   .court-card{
     background:var(--surface); border-radius:var(--radius); padding:18px 20px; margin-bottom:14px;
     box-shadow:0 1px 3px rgba(20,40,50,0.08);
   }
   .court-title{font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin-bottom:12px;}
-  .match-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
-  .team-block{flex:1; min-width:150px;}
+  .score-row{display:flex; align-items:center; justify-content:space-between; gap:14px; padding:9px 0;}
+  .score-row + .score-row{border-top:1px solid var(--line); margin-top:2px; padding-top:14px;}
+  .team-info{flex:1; min-width:0;}
   .team-tag{
     display:inline-block; font-size:11.5px; font-weight:800; padding:3px 9px; border-radius:6px;
     margin-bottom:6px;
   }
   .team-tag.a{background:var(--court); color:#fff;}
   .team-tag.b{background:var(--team-b); color:var(--court);}
-  .team-names{font-size:16px; font-weight:700; line-height:1.35;}
+  .team-names{font-size:16px; font-weight:700; line-height:1.35; overflow-wrap:break-word;}
   .score-input{
     width:64px; height:52px; text-align:center; font-family:'Montserrat', sans-serif; font-weight:800; font-size:24px;
-    border:1.5px solid var(--line); border-radius:10px; background:#FAFCFB;
+    border:1.5px solid var(--line); border-radius:10px; background:#FAFCFB; flex-shrink:0;
   }
   .score-input:focus{outline:none; border-color:var(--court);}
-  .vs-divider{font-family:'Montserrat', sans-serif; font-weight:700; color:var(--ink-soft); font-size:17px; padding:0 4px;}
+  @media (max-width: 380px){
+    .team-names{font-size:14.5px;}
+    .score-input{width:56px; height:48px; font-size:21px;}
+  }
 
   .resting-box{
     background:#FFF8E8; border:1px solid #F0DFAE; border-radius:12px; padding:12px 16px;
@@ -590,22 +599,23 @@
     return `
       <div class="court-card">
         <div class="court-title">Platz ${idx+1}</div>
-        <div class="match-row">
-          <div class="team-block">
+        <div class="score-row">
+          <div class="team-info">
             <span class="team-tag a">Team Blau</span>
             <div class="team-names">${escapeHtml(playerName(court.teamA[0]))} &amp; ${escapeHtml(playerName(court.teamA[1]))}</div>
           </div>
           <input class="score-input" type="number" min="0" max="${POINTS_TARGET}" placeholder="–"
             value="${teamAReady ? court.scoreA : ''}"
             oninput="setScore(${idx}, 'A', this.value)" />
-          <div class="vs-divider">:</div>
-          <input class="score-input" type="number" min="0" max="${POINTS_TARGET}" placeholder="–"
-            value="${teamBReady ? court.scoreB : ''}"
-            oninput="setScore(${idx}, 'B', this.value)" />
-          <div class="team-block" style="text-align:right;">
+        </div>
+        <div class="score-row">
+          <div class="team-info">
             <span class="team-tag b">Team Gelb</span>
             <div class="team-names">${escapeHtml(playerName(court.teamB[0]))} &amp; ${escapeHtml(playerName(court.teamB[1]))}</div>
           </div>
+          <input class="score-input" type="number" min="0" max="${POINTS_TARGET}" placeholder="–"
+            value="${teamBReady ? court.scoreB : ''}"
+            oninput="setScore(${idx}, 'B', this.value)" />
         </div>
       </div>
     `;
