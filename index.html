@@ -636,92 +636,130 @@
   }
   function spaceOut(str){ return str.split('').join('\u2009'); } // thin space for a light letter-spacing effect
 
+  function fitFontSize(ctx, text, maxWidth, startPx, minPx, weight){
+    let size = startPx;
+    while(size > minPx){
+      ctx.font = weight + ' ' + size + 'px Montserrat, sans-serif';
+      if(ctx.measureText(text).width <= maxWidth) break;
+      size -= 2;
+    }
+    return size;
+  }
+
+  function roundRect(ctx, x, y, w, h, r){
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
   async function buildShareCanvas(){
-    const fontSpecs = ['800 64px Montserrat','700 26px Montserrat','600 28px Montserrat','700 32px Montserrat','800 34px Montserrat','600 24px Montserrat'];
+    const fontSpecs = ['800 44px Montserrat','700 28px Montserrat','700 30px Montserrat','800 44px Montserrat','600 28px Montserrat'];
     try{ await Promise.all(fontSpecs.map(f=>document.fonts.load(f))); }catch(e){ /* proceed with fallback font if loading fails */ }
 
     const logoImg = await loadImage(LOGO_SRC);
     const sorted = standings();
-    const winner = sorted[0];
+    const top3 = sorted.slice(0,3);
 
     const W = 1080, H = 1350;
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
 
-    ctx.fillStyle = '#F2F4F6';
+    // brand navy background
+    ctx.fillStyle = '#020F23';
     ctx.fillRect(0,0,W,H);
+
+    // white card behind the logo so it stays crisp on the navy background
+    const cardW = 420, cardH = 190, cardX = (W-cardW)/2, cardY = 70;
+    ctx.fillStyle = '#FFFFFF';
+    roundRect(ctx, cardX, cardY, cardW, cardH, 26);
+    ctx.fill();
 
     const logoH = 130;
     const logoW = logoImg.width * (logoH/logoImg.height);
-    ctx.drawImage(logoImg, (W-logoW)/2, 70, logoW, logoH);
+    ctx.drawImage(logoImg, cardX + (cardW-logoW)/2, cardY + (cardH-logoH)/2, logoW, logoH);
 
-    let y = 70 + logoH + 70;
+    let y = cardY + cardH + 60;
 
     ctx.textAlign = 'center';
-    ctx.font = '92px sans-serif';
-    ctx.fillText('🏆', W/2, y);
-    y += 78;
+    ctx.font = '700 28px Montserrat, sans-serif';
+    ctx.fillStyle = '#FDBB0B';
+    ctx.fillText(spaceOut('TURNIER-ERGEBNIS'), W/2, y);
 
-    ctx.font = '700 26px Montserrat, sans-serif';
-    ctx.fillStyle = '#9C7207';
-    ctx.fillText(spaceOut('SIEGER:IN'), W/2, y);
-    y += 62;
+    y += 34;
+    ctx.strokeStyle = 'rgba(253,187,11,0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(W/2 - 70, y);
+    ctx.lineTo(W/2 + 70, y);
+    ctx.stroke();
 
-    ctx.font = '800 64px Montserrat, sans-serif';
-    ctx.fillStyle = '#020F23';
-    ctx.fillText(winner.name, W/2, y);
-    y += 48;
+    // podium geometry: classic 2nd - 1st - 3rd arrangement
+    const baseline = 930;
+    const barW = 230, gap = 36;
+    const totalW = barW*3 + gap*2;
+    const startX = (W - totalW)/2;
+    const columns = [
+      { rank:1, x: startX + barW + gap, h: 310, medal:'🥇', fill:'#FDBB0B' },
+      { rank:2, x: startX,               h: 225, medal:'🥈', fill:'#C9D0D6' },
+      { rank:3, x: startX + (barW+gap)*2, h: 160, medal:'🥉', fill:'#C98A4B' }
+    ];
 
+    columns.forEach(col=>{
+      const p = top3[col.rank-1];
+      const barTop = baseline - col.h;
+      if(!p) return;
+
+      // medal
+      ctx.textAlign = 'center';
+      ctx.font = '64px sans-serif';
+      ctx.fillText(col.medal, col.x + barW/2, barTop - 95);
+
+      // name (fitted to column width)
+      const nameSize = fitFontSize(ctx, p.name, barW + 30, 32, 20, '700');
+      ctx.font = '700 ' + nameSize + 'px Montserrat, sans-serif';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(p.name, col.x + barW/2, barTop - 34);
+
+      // bar
+      roundRect(ctx, col.x, barTop, barW, col.h, 14);
+      ctx.fillStyle = col.fill;
+      ctx.fill();
+
+      // points inside the bar
+      const pointsStr = String(p.points);
+      const pointsSize = fitFontSize(ctx, pointsStr, barW - 30, 46, 26, '800');
+      ctx.font = '800 ' + pointsSize + 'px Montserrat, sans-serif';
+      ctx.fillStyle = '#020F23';
+      ctx.fillText(pointsStr, col.x + barW/2, barTop + col.h/2 + pointsSize*0.35);
+    });
+
+    y = baseline + 68;
+    ctx.textAlign = 'center';
     ctx.font = '600 28px Montserrat, sans-serif';
-    ctx.fillStyle = '#5B6472';
-    ctx.fillText(`${winner.points} Punkte aus ${winner.gamesPlayed} Matches`, W/2, y);
-    y += 56;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(`🎾 ${sorted.length} Spieler:innen · ${state.history.length} Runden gespielt`, W/2, y);
 
-    ctx.strokeStyle = '#D8DEE2';
+    y += 44;
+    const dateStr = new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
+    ctx.font = '500 24px Montserrat, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText(`📅 ${dateStr}`, W/2, y);
+
+    ctx.strokeStyle = 'rgba(253,187,11,0.4)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(W*0.15, y);
-    ctx.lineTo(W*0.85, y);
+    ctx.moveTo(W*0.3, H-140);
+    ctx.lineTo(W*0.7, H-140);
     ctx.stroke();
-    y += 54;
 
-    const maxRows = Math.min(sorted.length, 9);
-    const rowH = 76;
-    for(let i=0; i<maxRows; i++){
-      const p = sorted[i];
-      const rowY = y + i*rowH;
-      ctx.beginPath();
-      ctx.arc(120, rowY+8, 27, 0, Math.PI*2);
-      ctx.fillStyle = i===0 ? '#FDBB0B' : '#E5E9EB';
-      ctx.fill();
-      ctx.textAlign = 'center';
-      ctx.font = '800 26px Montserrat, sans-serif';
-      ctx.fillStyle = '#020F23';
-      ctx.fillText(String(i+1), 120, rowY+17);
-
-      ctx.textAlign = 'left';
-      ctx.font = '700 32px Montserrat, sans-serif';
-      ctx.fillStyle = '#0B1420';
-      ctx.fillText(p.name, 172, rowY+17);
-
-      ctx.textAlign = 'right';
-      ctx.font = '800 34px Montserrat, sans-serif';
-      ctx.fillStyle = '#020F23';
-      ctx.fillText(String(p.points), W-100, rowY+17);
-    }
-    y += maxRows*rowH + 6;
-    if(sorted.length > maxRows){
-      ctx.textAlign = 'center';
-      ctx.font = '600 24px Montserrat, sans-serif';
-      ctx.fillStyle = '#5B6472';
-      ctx.fillText(`+ ${sorted.length - maxRows} weitere`, W/2, y);
-    }
-
-    ctx.textAlign = 'center';
     ctx.font = '600 24px Montserrat, sans-serif';
-    ctx.fillStyle = '#5B6472';
-    ctx.fillText('Alsdorfer Padel Club · apc-alsdorf.de', W/2, H-60);
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillText('Alsdorfer Padel Club · apc-alsdorf.de', W/2, H-98);
 
     return canvas;
   }
